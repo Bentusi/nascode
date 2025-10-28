@@ -4,6 +4,7 @@
 #include <memory>
 #include "PluginManager.h"
 #include "EventBus.h"
+#include "I18nManager.h"
 
 namespace nascode {
 namespace core {
@@ -42,6 +43,11 @@ public:
      * @brief 获取事件总线
      */
     EventBus* eventBus() const { return m_eventBus.get(); }
+
+    /**
+     * @brief 获取国际化管理器
+     */
+    I18nManager* i18nManager() const { return &I18nManager::getInstance(); }
 
 signals:
     void initialized();

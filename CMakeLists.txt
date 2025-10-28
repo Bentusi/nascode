@@ -7,6 +7,9 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+# 启用Qt语言工具
+set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/forms)
+
 # Qt6配置
 find_package(Qt6 REQUIRED COMPONENTS 
     Core 
@@ -14,6 +17,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets 
     Network
     SerialPort
+    LinguistTools
 )
 
 # 第三方库
@@ -35,6 +39,18 @@ add_subdirectory(src/communication)
 add_subdirectory(src/plugins)
 add_subdirectory(src/app)
 
+# 翻译文件
+set(TS_FILES
+    ${CMAKE_SOURCE_DIR}/translations/nascode_zh_CN.ts
+    ${CMAKE_SOURCE_DIR}/translations/nascode_en_US.ts
+)
+
+# 生成.qm文件
+qt6_add_translation(QM_FILES ${TS_FILES})
+
+# 添加翻译文件到构建
+add_custom_target(translations ALL DEPENDS ${QM_FILES})
+
 # 主可执行文件
 add_executable(${PROJECT_NAME}
     src/main.cpp
@@ -55,4 +71,9 @@ target_link_libraries(${PROJECT_NAME}
 # 安装配置
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
+)
+
+# 安装翻译文件
+install(FILES ${QM_FILES}
+    DESTINATION bin/translations
 )

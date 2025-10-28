@@ -2,6 +2,7 @@
 #include "CodeEditor.h"
 #include "OutputPanel.h"
 #include "../controllers/ProjectController.h"
+#include "../core/Application.h"
 #include <QApplication>
 #include <QMessageBox>
 #include <QFileDialog>
@@ -9,6 +10,7 @@
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QCloseEvent>
+#include <QActionGroup>
 #include <spdlog/spdlog.h>
 
 namespace nascode {
@@ -46,6 +48,7 @@ MainWindow::MainWindow(QWidget* parent)
     setCentralWidget(m_centralSplitter);
 
     setupConnections();
+    retranslateUi();
 
     statusBar()->showMessage(tr("Ready"), 2000);
 }
@@ -58,6 +61,14 @@ void MainWindow::closeEvent(QCloseEvent* event)
 {
     // TODO: 检查未保存的更改
     QMainWindow::closeEvent(event);
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QMainWindow::changeEvent(event);
 }
 
 void MainWindow::createActions()
@@ -117,6 +128,26 @@ void MainWindow::createActions()
     m_stopDebugAction->setShortcut(Qt::SHIFT | Qt::Key_F5);
 
     m_pauseDebugAction = new QAction(tr("&Pause"), this);
+    
+    // 语言切换动作
+    m_languageActionGroup = new QActionGroup(this);
+    m_englishAction = new QAction(tr("English"), this);
+    m_englishAction->setCheckable(true);
+    m_englishAction->setData("English");
+    m_languageActionGroup->addAction(m_englishAction);
+    
+    m_chineseAction = new QAction(tr("Chinese"), this);
+    m_chineseAction->setCheckable(true);
+    m_chineseAction->setData("Chinese");
+    m_languageActionGroup->addAction(m_chineseAction);
+    
+    // 根据当前语言设置选中状态
+    auto& i18n = nascode::core::I18nManager::getInstance();
+    if (i18n.currentLanguage() == nascode::core::I18nManager::Chinese) {
+        m_chineseAction->setChecked(true);
+    } else {
+        m_englishAction->setChecked(true);
+    }
 }
 
 void MainWindow::createMenus()
@@ -150,6 +181,12 @@ void MainWindow::createMenus()
     m_debugMenu->addAction(m_stopDebugAction);
 
     m_toolsMenu = menuBar()->addMenu(tr("&Tools"));
+    
+    // 语言子菜单
+    m_languageMenu = m_toolsMenu->addMenu(tr("Language"));
+    m_languageMenu->addAction(m_englishAction);
+    m_languageMenu->addAction(m_chineseAction);
+    
     m_helpMenu = menuBar()->addMenu(tr("&Help"));
 }
 
@@ -220,6 +257,43 @@ void MainWindow::setupConnections()
             this, &MainWindow::onProjectTreeContextMenu);
     connect(m_projectTree, &QTreeView::doubleClicked, 
             this, &MainWindow::onProjectItemDoubleClicked);
+    
+    // 语言切换
+    connect(m_languageActionGroup, &QActionGroup::triggered, 
+            this, &MainWindow::onLanguageChanged);
+}
+
+void MainWindow::retranslateUi()
+{
+    // 更新窗口标题
+    setWindowTitle(tr("NasCode - IEC-61131 ST Programming Environment"));
+    
+    // 更新菜单
+    m_fileMenu->setTitle(tr("&File"));
+    m_editMenu->setTitle(tr("&Edit"));
+    m_buildMenu->setTitle(tr("&Build"));
+    m_debugMenu->setTitle(tr("&Debug"));
+    m_toolsMenu->setTitle(tr("&Tools"));
+    m_helpMenu->setTitle(tr("&Help"));
+    
+    // 更新语言菜单
+    m_languageMenu->setTitle(tr("Language"));
+    m_englishAction->setText(tr("English"));
+    m_chineseAction->setText(tr("Chinese"));
+    
+    // 更新工具栏
+    m_fileToolBar->setWindowTitle(tr("File"));
+    m_editToolBar->setWindowTitle(tr("Edit"));
+    m_buildToolBar->setWindowTitle(tr("Build"));
+    m_debugToolBar->setWindowTitle(tr("Debug"));
+    
+    // 更新停靠窗口
+    m_outputDock->setWindowTitle(tr("Output"));
+    m_watchDock->setWindowTitle(tr("Watch"));
+    m_libraryDock->setWindowTitle(tr("Library"));
+    
+    // 更新状态栏
+    statusBar()->showMessage(tr("Ready"));
 }
 
 void MainWindow::onNewProject()
@@ -291,6 +365,25 @@ void MainWindow::onProjectTreeContextMenu(const QPoint& pos)
 void MainWindow::onProjectItemDoubleClicked(const QModelIndex& index)
 {
     // TODO: 打开编辑器
+}
+
+void MainWindow::onLanguageChanged()
+{
+    QAction* action = m_languageActionGroup->checkedAction();
+    if (!action) return;
+    
+    QString langName = action->data().toString();
+    auto& i18n = nascode::core::I18nManager::getInstance();
+    auto lang = nascode::core::I18nManager::languageFromString(langName);
+    
+    if (lang != i18n.currentLanguage()) {
+        i18n.switchLanguage(lang);
+        
+        // 提示重启应用以完全生效
+        QMessageBox::information(this,
+            tr("Language"),
+            tr("Language changed. Please restart the application for complete effect."));
+    }
 }
 
 } // namespace views

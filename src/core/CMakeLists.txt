@@ -6,6 +6,8 @@ add_library(NasCodeCore STATIC
     PluginManager.cpp
     PluginManager.h
     IPlugin.h
+    I18nManager.cpp
+    I18nManager.h
 )
 
 target_link_libraries(NasCodeCore

@@ -34,6 +34,9 @@ bool Application::initialize()
     // 加载配置
     loadSettings();
 
+    // 初始化国际化系统
+    I18nManager::getInstance().initialize();
+
     // 初始化事件总线
     // m_eventBus已在构造函数中创建
 

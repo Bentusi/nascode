@@ -174,7 +174,23 @@ sudo apt install qt6-base-dev qt6-serialport-dev libspdlog-dev cmake build-essen
 ./build.sh
 
 # 运行
+## 运行
+
+```bash
 ./build/NasCode
+```
+
+## 语言切换
+
+NasCode支持中英文双语界面:
+
+1. **自动检测**: 首次运行时自动检测系统语言
+2. **手动切换**: 
+   - 菜单: **工具 (Tools)** → **语言 (Language)**
+   - 选择: **English** 或 **Chinese**
+   - 重启应用生效
+
+详细说明请参阅: [i18n文档](docs/I18N_GUIDE.md)
 ```
 
 ### 项目结构

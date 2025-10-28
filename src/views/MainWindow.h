@@ -54,9 +54,15 @@ private slots:
     void onStopDebug();
     void onPauseDebug();
 
+    // 工具菜单
+    void onLanguageChanged();
+
     // 工程树操作
     void onProjectTreeContextMenu(const QPoint& pos);
     void onProjectItemDoubleClicked(const QModelIndex& index);
+
+protected:
+    void changeEvent(QEvent* event) override;
 
 private:
     void createActions();
@@ -65,6 +71,7 @@ private:
     void createStatusBar();
     void createDockWindows();
     void setupConnections();
+    void retranslateUi();
 
 private:
     // 中央部件
@@ -113,6 +120,12 @@ private:
     QAction* m_startDebugAction;
     QAction* m_stopDebugAction;
     QAction* m_pauseDebugAction;
+
+    // 语言菜单
+    QMenu* m_languageMenu;
+    QActionGroup* m_languageActionGroup;
+    QAction* m_englishAction;
+    QAction* m_chineseAction;
 };
 
 } // namespace views
