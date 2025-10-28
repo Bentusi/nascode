@@ -1,10 +1,14 @@
 add_library(NasCodeModels STATIC
     Project.h
     Project.cpp
+    ProjectConfig.h
+    ProjectConfig.cpp
     POU.h
     POU.cpp
     ProjectModel.h
     ProjectModel.cpp
+    LibraryManager.h
+    LibraryManager.cpp
 )
 
 target_link_libraries(NasCodeModels

@@ -2,15 +2,19 @@
 #include "CodeEditor.h"
 #include "OutputPanel.h"
 #include "../controllers/ProjectController.h"
+#include "../models/ProjectModel.h"
 #include "../core/Application.h"
 #include <QApplication>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <QDockWidget>
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QCloseEvent>
 #include <QActionGroup>
+#include <QDir>
+#include <QFileInfo>
 #include <spdlog/spdlog.h>
 
 namespace nascode {
@@ -18,6 +22,8 @@ namespace views {
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
+    , m_projectController(nullptr)
+    , m_projectModel(nullptr)
 {
     setWindowTitle("NasCode - IEC-61131 ST Programming Environment");
     resize(1280, 800);
@@ -241,14 +247,27 @@ void MainWindow::createDockWindows()
     addDockWidget(Qt::RightDockWidgetArea, m_libraryDock);
 }
 
+void MainWindow::setProjectController(controllers::ProjectController* controller)
+{
+    m_projectController = controller;
+}
+
+void MainWindow::setProjectModel(models::ProjectModel* model)
+{
+    m_projectModel = model;
+    if (m_projectTree && model) {
+        m_projectTree->setModel(model);
+    }
+}
+
 void MainWindow::setupConnections()
 {
+    // 文件菜单
     connect(m_newProjectAction, &QAction::triggered, this, &MainWindow::onNewProject);
     connect(m_openProjectAction, &QAction::triggered, this, &MainWindow::onOpenProject);
     connect(m_saveProjectAction, &QAction::triggered, this, &MainWindow::onSaveProject);
     connect(m_closeProjectAction, &QAction::triggered, this, &MainWindow::onCloseProject);
-    connect(m_exitAction, &QAction::triggered, this, &MainWindow::close);
-
+    connect(m_exitAction, &QAction::triggered, this, &QMainWindow::close);
     connect(m_buildAction, &QAction::triggered, this, &MainWindow::onBuild);
     connect(m_downloadAction, &QAction::triggered, this, &MainWindow::onDownload);
     connect(m_startDebugAction, &QAction::triggered, this, &MainWindow::onStartDebug);
@@ -299,30 +318,98 @@ void MainWindow::retranslateUi()
 void MainWindow::onNewProject()
 {
     spdlog::info("New project requested");
-    // TODO: 显示新建工程对话框
+    
+    if (!m_projectController) {
+        QMessageBox::warning(this, tr("Error"), tr("Project controller not initialized"));
+        return;
+    }
+    
+    // 获取项目名称
+    bool ok;
+    QString projectName = QInputDialog::getText(this, tr("New Project"),
+                                                tr("Project name:"), QLineEdit::Normal,
+                                                "MyProject", &ok);
+    if (!ok || projectName.isEmpty()) {
+        return;
+    }
+    
+    // 选择项目保存位置
+    QString projectPath = QFileDialog::getSaveFileName(this,
+        tr("Create New Project"),
+        QDir::homePath() + "/" + projectName + ".nascode",
+        tr("NasCode Project Files (*.nascode)"));
+    
+    if (projectPath.isEmpty()) {
+        return;
+    }
+    
+    // 确保有正确的扩展名
+    if (!projectPath.endsWith(".nascode")) {
+        projectPath += ".nascode";
+    }
+    
+    // 创建项目
+    if (m_projectController->createNewProject(projectName, projectPath)) {
+        statusBar()->showMessage(tr("Project created: %1").arg(projectName), 3000);
+        spdlog::info("Project created successfully: {}", projectName.toStdString());
+    } else {
+        QMessageBox::critical(this, tr("Error"), tr("Failed to create project"));
+    }
 }
 
 void MainWindow::onOpenProject()
 {
-    QString fileName = QFileDialog::getOpenFileName(this,
-        tr("Open Project"), "", tr("NasCode Project (*.nsp)"));
+    spdlog::info("Open project requested");
     
-    if (!fileName.isEmpty()) {
-        spdlog::info("Opening project: {}", fileName.toStdString());
-        // TODO: 通过Controller打开工程
+    if (!m_projectController) {
+        QMessageBox::warning(this, tr("Error"), tr("Project controller not initialized"));
+        return;
+    }
+    
+    QString filePath = QFileDialog::getOpenFileName(this,
+        tr("Open Project"),
+        QDir::homePath(),
+        tr("NasCode Project Files (*.nascode);;All Files (*)"));
+    
+    if (filePath.isEmpty()) {
+        return;
+    }
+    
+    if (m_projectController->openProject(filePath)) {
+        statusBar()->showMessage(tr("Project opened: %1").arg(QFileInfo(filePath).baseName()), 3000);
+        spdlog::info("Project opened successfully: {}", filePath.toStdString());
+    } else {
+        QMessageBox::critical(this, tr("Error"), tr("Failed to open project: %1").arg(filePath));
     }
 }
 
 void MainWindow::onSaveProject()
 {
     spdlog::info("Save project requested");
-    // TODO: 保存当前工程
+    
+    if (!m_projectController) {
+        QMessageBox::warning(this, tr("Error"), tr("Project controller not initialized"));
+        return;
+    }
+    
+    if (m_projectController->saveProject()) {
+        statusBar()->showMessage(tr("Project saved"), 2000);
+    } else {
+        QMessageBox::critical(this, tr("Error"), tr("Failed to save project"));
+    }
 }
 
 void MainWindow::onCloseProject()
 {
     spdlog::info("Close project requested");
-    // TODO: 关闭当前工程
+    
+    if (!m_projectController) {
+        return;
+    }
+    
+    // TODO: 检查未保存的更改
+    m_projectController->closeProject();
+    statusBar()->showMessage(tr("Project closed"), 2000);
 }
 
 void MainWindow::onUndo() {}

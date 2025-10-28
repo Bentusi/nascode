@@ -10,6 +10,15 @@
 #include <memory>
 
 namespace nascode {
+
+namespace controllers {
+class ProjectController;
+}
+
+namespace models {
+class ProjectModel;
+}
+
 namespace views {
 
 class CodeEditor;
@@ -25,6 +34,10 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
+
+    // 设置MVC组件
+    void setProjectController(controllers::ProjectController* controller);
+    void setProjectModel(models::ProjectModel* model);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -79,11 +92,15 @@ private:
     QTreeView* m_projectTree;
     QTabWidget* m_editorTabs;
 
-    // 停靠窗口
+    // 输出面板
     OutputPanel* m_outputPanel;
     QDockWidget* m_outputDock;
     QDockWidget* m_watchDock;
     QDockWidget* m_libraryDock;
+
+    // MVC组件
+    controllers::ProjectController* m_projectController;
+    models::ProjectModel* m_projectModel;
 
     // 菜单
     QMenu* m_fileMenu;

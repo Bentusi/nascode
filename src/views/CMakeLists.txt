@@ -3,6 +3,8 @@ add_library(NasCodeViews STATIC
     MainWindow.cpp
     CodeEditor.h
     CodeEditor.cpp
+    CodeCompleter.h
+    CodeCompleter.cpp
     OutputPanel.h
     OutputPanel.cpp
 )

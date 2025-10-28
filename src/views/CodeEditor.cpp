@@ -1,7 +1,12 @@
 #include "CodeEditor.h"
+#include "CodeCompleter.h"
 #include <QPainter>
 #include <QTextBlock>
 #include <QRegularExpression>
+#include <QCompleter>
+#include <QAbstractItemView>
+#include <QScrollBar>
+#include <QKeyEvent>
 #include <spdlog/spdlog.h>
 
 namespace nascode {
@@ -174,11 +179,388 @@ void CodeEditor::updateLineNumberArea(const QRect& rect, int dy)
         updateLineNumberAreaWidth(0);
 }
 
+void CodeEditor::onTextChanged()
+{
+    // 文本改变时的处理
+}
+
+void CodeEditor::checkAutoCompletion()
+{
+    QString prefix = m_completer->getCurrentPrefix();
+    if (prefix.length() >= 2) {
+        m_completer->showCompletion(prefix);
+    }
+}
+
+void CodeEditor::toggleComment()
+{
+    QTextCursor cursor = textCursor();
+    
+    // 获取选中的行范围
+    int startLine = cursor.blockNumber();
+    int endLine = startLine;
+    
+    if (cursor.hasSelection()) {
+        int start = cursor.selectionStart();
+        int end = cursor.selectionEnd();
+        cursor.setPosition(start);
+        startLine = cursor.blockNumber();
+        cursor.setPosition(end);
+        endLine = cursor.blockNumber();
+    }
+    
+    cursor.beginEditBlock();
+    
+    // 检查是否所有行都已注释
+    bool allCommented = true;
+    QTextBlock block = document()->findBlockByNumber(startLine);
+    for (int i = startLine; i <= endLine && block.isValid(); ++i) {
+        QString text = block.text().trimmed();
+        if (!text.isEmpty() && !text.startsWith("//")) {
+            allCommented = false;
+            break;
+        }
+        block = block.next();
+    }
+    
+    // 切换注释
+    block = document()->findBlockByNumber(startLine);
+    for (int i = startLine; i <= endLine && block.isValid(); ++i) {
+        cursor.setPosition(block.position());
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        
+        if (allCommented) {
+            // 取消注释
+            QString text = block.text();
+            int commentPos = text.indexOf("//");
+            if (commentPos >= 0) {
+                cursor.setPosition(block.position() + commentPos);
+                cursor.deleteChar();
+                cursor.deleteChar();
+            }
+        } else {
+            // 添加注释
+            cursor.insertText("//");
+        }
+        
+        block = block.next();
+    }
+    
+    cursor.endEditBlock();
+}
+
+void CodeEditor::formatCode()
+{
+    // TODO: 实现代码格式化
+    spdlog::info("Code formatting not yet implemented");
+}
+
+void CodeEditor::gotoLine(int line)
+{
+    QTextCursor cursor(document()->findBlockByNumber(line - 1));
+    setTextCursor(cursor);
+    centerCursor();
+}
+
+void CodeEditor::findMatchingBracket()
+{
+    QTextCursor cursor = textCursor();
+    QChar c = document()->characterAt(cursor.position());
+    
+    if (isOpeningBracket(c)) {
+        // 向前查找配对括号
+        int depth = 1;
+        QChar closing = getMatchingBracket(c);
+        
+        for (int pos = cursor.position() + 1; pos < document()->characterCount(); ++pos) {
+            QChar ch = document()->characterAt(pos);
+            if (ch == c) depth++;
+            else if (ch == closing) {
+                depth--;
+                if (depth == 0) {
+                    cursor.setPosition(pos);
+                    setTextCursor(cursor);
+                    return;
+                }
+            }
+        }
+    } else if (isClosingBracket(c)) {
+        // 向后查找配对括号
+        int depth = 1;
+        QChar opening = getMatchingBracket(c);
+        
+        for (int pos = cursor.position() - 1; pos >= 0; --pos) {
+            QChar ch = document()->characterAt(pos);
+            if (ch == c) depth++;
+            else if (ch == opening) {
+                depth--;
+                if (depth == 0) {
+                    cursor.setPosition(pos);
+                    setTextCursor(cursor);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+void CodeEditor::highlightMatchingBrackets()
+{
+    m_bracketSelections.clear();
+    
+    QTextCursor cursor = textCursor();
+    int pos = cursor.position();
+    
+    // 检查光标前后的字符
+    QChar charBefore = (pos > 0) ? document()->characterAt(pos - 1) : QChar();
+    QChar charAfter = document()->characterAt(pos);
+    
+    auto highlightPair = [this](int pos1, int pos2) {
+        QTextEdit::ExtraSelection selection1;
+        selection1.format.setBackground(QColor(Qt::yellow).lighter(160));
+        QTextCursor cursor1 = textCursor();
+        cursor1.setPosition(pos1);
+        cursor1.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+        selection1.cursor = cursor1;
+        m_bracketSelections.append(selection1);
+        
+        QTextEdit::ExtraSelection selection2;
+        selection2.format.setBackground(QColor(Qt::yellow).lighter(160));
+        QTextCursor cursor2 = textCursor();
+        cursor2.setPosition(pos2);
+        cursor2.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+        selection2.cursor = cursor2;
+        m_bracketSelections.append(selection2);
+    };
+    
+    // 查找匹配的括号
+    auto findMatch = [this](int startPos, QChar open, QChar close, bool forward) -> int {
+        int depth = 1;
+        int step = forward ? 1 : -1;
+        int endPos = forward ? document()->characterCount() : 0;
+        
+        for (int p = startPos + step; forward ? (p < endPos) : (p >= endPos); p += step) {
+            QChar ch = document()->characterAt(p);
+            if (ch == open) depth++;
+            else if (ch == close) {
+                depth--;
+                if (depth == 0) return p;
+            }
+        }
+        return -1;
+    };
+    
+    if (isOpeningBracket(charBefore)) {
+        QChar closing = getMatchingBracket(charBefore);
+        int match = findMatch(pos - 1, charBefore, closing, true);
+        if (match >= 0) {
+            highlightPair(pos - 1, match);
+        }
+    } else if (isClosingBracket(charBefore)) {
+        QChar opening = getMatchingBracket(charBefore);
+        int match = findMatch(pos - 1, charBefore, opening, false);
+        if (match >= 0) {
+            highlightPair(match, pos - 1);
+        }
+    }
+    
+    if (isOpeningBracket(charAfter)) {
+        QChar closing = getMatchingBracket(charAfter);
+        int match = findMatch(pos, charAfter, closing, true);
+        if (match >= 0) {
+            highlightPair(pos, match);
+        }
+    } else if (isClosingBracket(charAfter)) {
+        QChar opening = getMatchingBracket(charAfter);
+        int match = findMatch(pos, charAfter, opening, false);
+        if (match >= 0) {
+            highlightPair(match, pos);
+        }
+    }
+    
+    // 应用高亮
+    QList<QTextEdit::ExtraSelection> selections = extraSelections();
+    selections.append(m_bracketSelections);
+    setExtraSelections(selections);
+}
+
+void CodeEditor::autoIndent()
+{
+    QTextCursor cursor = textCursor();
+    QTextBlock previousBlock = cursor.block().previous();
+    
+    if (previousBlock.isValid()) {
+        QString previousLine = previousBlock.text();
+        QString indent = getIndentation(previousLine);
+        
+        // 如果上一行以THEN, DO, STRUCT等结尾,增加缩进
+        QString trimmed = previousLine.trimmed();
+        if (trimmed.endsWith("THEN") || trimmed.endsWith("DO") ||
+            trimmed.endsWith("STRUCT") || trimmed.endsWith("VAR") ||
+            trimmed.endsWith("VAR_INPUT") || trimmed.endsWith("VAR_OUTPUT")) {
+            indent += QString(m_tabSize, ' ');
+        }
+        
+        cursor.insertText(indent);
+    }
+}
+
+QString CodeEditor::getIndentation(const QString& line) const
+{
+    QString indent;
+    for (QChar c : line) {
+        if (c == ' ' || c == '\t') {
+            indent += c;
+        } else {
+            break;
+        }
+    }
+    return indent;
+}
+
+bool CodeEditor::isOpeningBracket(QChar c) const
+{
+    return c == '(' || c == '[' || c == '{';
+}
+
+bool CodeEditor::isClosingBracket(QChar c) const
+{
+    return c == ')' || c == ']' || c == '}';
+}
+
+QChar CodeEditor::getMatchingBracket(QChar c) const
+{
+    if (c == '(') return ')';
+    if (c == ')') return '(';
+    if (c == '[') return ']';
+    if (c == ']') return '[';
+    if (c == '{') return '}';
+    if (c == '}') return '{';
+    return QChar();
+}
+
 void CodeEditor::resizeEvent(QResizeEvent* e)
 {
     QPlainTextEdit::resizeEvent(e);
     QRect cr = contentsRect();
     m_lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
+}
+
+void CodeEditor::keyPressEvent(QKeyEvent* event)
+{
+    // 处理补全器
+    if (m_completer->completer()->popup()->isVisible()) {
+        // 补全弹窗可见时的按键处理
+        switch (event->key()) {
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+        case Qt::Key_Escape:
+        case Qt::Key_Tab:
+        case Qt::Key_Backtab:
+            event->ignore();
+            return;
+        default:
+            break;
+        }
+    }
+
+    // Tab键处理 - 尝试展开代码片段或插入空格
+    if (event->key() == Qt::Key_Tab && event->modifiers() == Qt::NoModifier) {
+        QString prefix = m_completer->getCurrentPrefix();
+        if (!prefix.isEmpty() && m_snippetManager->tryExpandSnippet(prefix)) {
+            return;  // 成功展开片段
+        }
+        // 否则插入空格
+        insertPlainText(QString(m_tabSize, ' '));
+        return;
+    }
+
+    // Ctrl+Space - 手动触发补全
+    if (event->key() == Qt::Key_Space && event->modifiers() == Qt::ControlModifier) {
+        QString prefix = m_completer->getCurrentPrefix();
+        m_completer->showCompletion(prefix);
+        return;
+    }
+
+    // Ctrl+/ - 切换注释
+    if (event->key() == Qt::Key_Slash && event->modifiers() == Qt::ControlModifier) {
+        toggleComment();
+        return;
+    }
+
+    // Ctrl+] - 增加缩进
+    if (event->key() == Qt::Key_BracketRight && event->modifiers() == Qt::ControlModifier) {
+        QTextCursor cursor = textCursor();
+        cursor.insertText(QString(m_tabSize, ' '));
+        return;
+    }
+
+    // Ctrl+[ - 减少缩进
+    if (event->key() == Qt::Key_BracketLeft && event->modifiers() == Qt::ControlModifier) {
+        QTextCursor cursor = textCursor();
+        QString line = cursor.block().text();
+        if (line.startsWith(QString(m_tabSize, ' '))) {
+            cursor.movePosition(QTextCursor::StartOfBlock);
+            for (int i = 0; i < m_tabSize; ++i) {
+                cursor.deleteChar();
+            }
+        }
+        return;
+    }
+
+    // Enter键 - 自动缩进
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        QPlainTextEdit::keyPressEvent(event);
+        if (m_autoIndentEnabled) {
+            autoIndent();
+        }
+        return;
+    }
+
+    // 自动配对括号
+    QChar c = event->text().isEmpty() ? QChar() : event->text().at(0);
+    if (c == '(' || c == '[' || c == '{') {
+        QTextCursor cursor = textCursor();
+        cursor.insertText(event->text());
+        
+        // 插入配对的右括号
+        QChar closing;
+        if (c == '(') closing = ')';
+        else if (c == '[') closing = ']';
+        else if (c == '{') closing = '}';
+        
+        cursor.insertText(QString(closing));
+        cursor.movePosition(QTextCursor::Left);
+        setTextCursor(cursor);
+        return;
+    }
+
+    // 默认处理
+    QPlainTextEdit::keyPressEvent(event);
+
+    // 触发自动补全
+    if (m_autoCompletionEnabled && event->text().length() > 0 && 
+        event->text().at(0).isLetterOrNumber()) {
+        m_completionTimer->start();
+    }
+}
+
+void CodeEditor::paintEvent(QPaintEvent* event)
+{
+    QPlainTextEdit::paintEvent(event);
+    
+    // 高亮匹配的括号
+    if (m_bracketMatchingEnabled) {
+        highlightMatchingBrackets();
+    }
+}
+
+void CodeEditor::focusInEvent(QFocusEvent* event)
+{
+    if (m_completer) {
+        m_completer->completer()->setWidget(this);
+    }
+    QPlainTextEdit::focusInEvent(event);
 }
 
 void CodeEditor::highlightCurrentLine()
@@ -221,12 +603,6 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent* event)
         bottom = top + qRound(blockBoundingRect(block).height());
         ++blockNumber;
     }
-}
-
-void CodeEditor::keyPressEvent(QKeyEvent* event)
-{
-    // TODO: 实现自动缩进、代码补全等功能
-    QPlainTextEdit::keyPressEvent(event);
 }
 
 } // namespace views

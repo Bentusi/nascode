@@ -39,6 +39,12 @@ add_subdirectory(src/communication)
 add_subdirectory(src/plugins)
 add_subdirectory(src/app)
 
+# 添加示例程序（可选）
+option(BUILD_EXAMPLES "Build example programs" ON)
+if(BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
 # 翻译文件
 set(TS_FILES
     ${CMAKE_SOURCE_DIR}/translations/nascode_zh_CN.ts

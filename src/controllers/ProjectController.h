@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include "../models/ProjectModel.h"
+#include "../models/LibraryManager.h"
 #include "../views/MainWindow.h"
 
 namespace nascode {
@@ -53,9 +54,34 @@ public slots:
     bool removePOU(const QString& name);
 
     /**
+     * @brief 添加库引用
+     */
+    bool addLibrary(const QString& libraryName);
+
+    /**
+     * @brief 移除库引用
+     */
+    bool removeLibrary(const QString& libraryName);
+
+    /**
+     * @brief 获取可用库列表
+     */
+    QList<models::LibraryReference> getAvailableLibraries() const;
+
+    /**
+     * @brief 获取项目统计信息
+     */
+    models::Project::Statistics getProjectStatistics() const;
+
+    /**
      * @brief 编译工程
      */
     bool buildProject();
+
+    /**
+     * @brief 下载到设备
+     */
+    bool downloadToDevice();
 
 signals:
     void projectCreated(const QString& projectPath);

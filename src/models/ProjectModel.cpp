@@ -26,6 +26,12 @@ public:
     }
     TreeItem* parentItem() { return m_parentItem; }
     void appendChild(TreeItem* child) { m_childItems.append(child); }
+    void removeChild(int row)
+    {
+        if (row >= 0 && row < m_childItems.size()) {
+            m_childItems.removeAt(row);
+        }
+    }
 
 private:
     QVector<TreeItem*> m_childItems;
@@ -126,26 +132,41 @@ ProjectModel::TreeItem* ProjectModel::getItem(const QModelIndex& index) const
 
 bool ProjectModel::createProject(const QString& name, const QString& path)
 {
+    beginResetModel();
+    
     m_currentProject = std::make_unique<Project>();
     m_currentProject->setName(name);
     m_currentProject->setPath(path);
     
+    // 构建树形结构
     setupModelData(m_rootItem.get());
     
+    // 保存项目文件
+    if (!m_currentProject->saveToFile(path)) {
+        m_currentProject.reset();
+        endResetModel();
+        return false;
+    }
+    
+    endResetModel();
     emit projectOpened(path);
     return true;
 }
 
 bool ProjectModel::openProject(const QString& filePath)
 {
+    beginResetModel();
+    
     auto project = std::make_unique<Project>();
     if (!project->loadFromFile(filePath)) {
+        endResetModel();
         return false;
     }
 
     m_currentProject = std::move(project);
     setupModelData(m_rootItem.get());
     
+    endResetModel();
     emit projectOpened(filePath);
     return true;
 }
@@ -173,7 +194,90 @@ void ProjectModel::closeProject()
 
 void ProjectModel::setupModelData(TreeItem* parent)
 {
-    // TODO: 根据当前工程数据构建树形结构
+    if (!m_currentProject) {
+        return;
+    }
+    
+    // 清空现有的子节点
+    while (parent->childCount() > 0) {
+        delete parent->child(0);
+        parent->removeChild(0);
+    }
+    
+    // 项目根节点
+    TreeItem* projectRoot = new TreeItem(
+        QVector<QVariant>() << m_currentProject->name() << "Project",
+        parent
+    );
+    parent->appendChild(projectRoot);
+    
+    // Programs文件夹
+    TreeItem* programsFolder = new TreeItem(
+        QVector<QVariant>() << "Programs" << "Folder",
+        projectRoot
+    );
+    projectRoot->appendChild(programsFolder);
+    
+    // 添加所有Program
+    auto programs = m_currentProject->getPOUsByType(POUType::Program);
+    for (const auto& pou : programs) {
+        TreeItem* item = new TreeItem(
+            QVector<QVariant>() << pou->name() << "Program",
+            programsFolder
+        );
+        programsFolder->appendChild(item);
+    }
+    
+    // Functions文件夹
+    TreeItem* functionsFolder = new TreeItem(
+        QVector<QVariant>() << "Functions" << "Folder",
+        projectRoot
+    );
+    projectRoot->appendChild(functionsFolder);
+    
+    // 添加所有Function
+    auto functions = m_currentProject->getPOUsByType(POUType::Function);
+    for (const auto& pou : functions) {
+        TreeItem* item = new TreeItem(
+            QVector<QVariant>() << pou->name() << "Function",
+            functionsFolder
+        );
+        functionsFolder->appendChild(item);
+    }
+    
+    // Function Blocks文件夹
+    TreeItem* fbsFolder = new TreeItem(
+        QVector<QVariant>() << "Function Blocks" << "Folder",
+        projectRoot
+    );
+    projectRoot->appendChild(fbsFolder);
+    
+    // 添加所有Function Block
+    auto fbs = m_currentProject->getPOUsByType(POUType::FunctionBlock);
+    for (const auto& pou : fbs) {
+        TreeItem* item = new TreeItem(
+            QVector<QVariant>() << pou->name() << "Function Block",
+            fbsFolder
+        );
+        fbsFolder->appendChild(item);
+    }
+    
+    // Libraries文件夹
+    TreeItem* librariesFolder = new TreeItem(
+        QVector<QVariant>() << "Libraries" << "Folder",
+        projectRoot
+    );
+    projectRoot->appendChild(librariesFolder);
+    
+    // 添加所有库
+    auto libraries = m_currentProject->getAllLibraries();
+    for (const auto& lib : libraries) {
+        TreeItem* item = new TreeItem(
+            QVector<QVariant>() << lib.name() << QString("Library %1").arg(lib.version()),
+            librariesFolder
+        );
+        librariesFolder->appendChild(item);
+    }
 }
 
 bool ProjectModel::addPOU(ProjectItemType type, const QString& name)
@@ -198,6 +302,11 @@ bool ProjectModel::addPOU(ProjectItemType type, const QString& name)
     }
 
     if (m_currentProject->addPOU(pou)) {
+        // 刷新树形结构
+        beginResetModel();
+        setupModelData(m_rootItem.get());
+        endResetModel();
+        
         emit pouAdded(name);
         return true;
     }
@@ -207,8 +316,35 @@ bool ProjectModel::addPOU(ProjectItemType type, const QString& name)
 
 bool ProjectModel::removePOU(const QModelIndex& index)
 {
-    // TODO: 实现POU删除
+    if (!m_currentProject || !index.isValid()) {
+        return false;
+    }
+    
+    TreeItem* item = getItem(index);
+    QString pouName = item->data(0).toString();
+    
+    if (m_currentProject->removePOU(pouName)) {
+        beginResetModel();
+        setupModelData(m_rootItem.get());
+        endResetModel();
+        
+        emit pouRemoved(pouName);
+        return true;
+    }
+    
     return false;
+}
+
+std::shared_ptr<POU> ProjectModel::getPOU(const QModelIndex& index) const
+{
+    if (!m_currentProject || !index.isValid()) {
+        return nullptr;
+    }
+    
+    TreeItem* item = getItem(index);
+    QString pouName = item->data(0).toString();
+    
+    return m_currentProject->getPOU(pouName);
 }
 
 } // namespace models

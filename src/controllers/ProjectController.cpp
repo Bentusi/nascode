@@ -1,4 +1,5 @@
 #include "ProjectController.h"
+#include "../models/LibraryManager.h"
 #include <spdlog/spdlog.h>
 
 namespace nascode {
@@ -98,6 +99,75 @@ bool ProjectController::buildProject()
 
     emit buildFinished(true);
     return true;
+}
+
+bool ProjectController::downloadToDevice()
+{
+    spdlog::info("Downloading to device");
+    
+    // TODO: 实现下载逻辑
+    return false;
+}
+
+bool ProjectController::addLibrary(const QString& libraryName)
+{
+    spdlog::info("Adding library: {}", libraryName.toStdString());
+    
+    auto& libManager = models::LibraryManager::instance();
+    models::LibraryReference lib = libManager.getLibraryInfo(libraryName);
+    
+    if (lib.name().isEmpty()) {
+        emit errorOccurred("Library not found: " + libraryName);
+        return false;
+    }
+    
+    auto project = m_model->currentProject();
+    if (!project) {
+        emit errorOccurred("No project opened");
+        return false;
+    }
+    
+    if (project->addLibrary(lib)) {
+        spdlog::info("Library added: {}", libraryName.toStdString());
+        return true;
+    }
+    
+    emit errorOccurred("Failed to add library");
+    return false;
+}
+
+bool ProjectController::removeLibrary(const QString& libraryName)
+{
+    spdlog::info("Removing library: {}", libraryName.toStdString());
+    
+    auto project = m_model->currentProject();
+    if (!project) {
+        emit errorOccurred("No project opened");
+        return false;
+    }
+    
+    if (project->removeLibrary(libraryName)) {
+        spdlog::info("Library removed: {}", libraryName.toStdString());
+        return true;
+    }
+    
+    emit errorOccurred("Failed to remove library");
+    return false;
+}
+
+QList<models::LibraryReference> ProjectController::getAvailableLibraries() const
+{
+    auto& libManager = models::LibraryManager::instance();
+    return libManager.getAvailableLibraries();
+}
+
+models::Project::Statistics ProjectController::getProjectStatistics() const
+{
+    auto project = m_model->currentProject();
+    if (project) {
+        return project->getStatistics();
+    }
+    return models::Project::Statistics();
 }
 
 } // namespace controllers

@@ -59,6 +59,13 @@ public:
     QString comment() const { return m_comment; }
     void setComment(const QString& comment) { m_comment = comment; }
 
+    // 序列化
+    QVariantMap toVariant() const;
+    void fromVariant(const QVariantMap& data);
+    
+    // 生成ST代码文本
+    QString generateSTCode() const;
+
 protected:
     POUType m_type;
     QString m_name;

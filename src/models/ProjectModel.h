@@ -75,6 +75,11 @@ public:
      * @brief 删除POU
      */
     bool removePOU(const QModelIndex& index);
+    
+    /**
+     * @brief 获取指定索引的POU
+     */
+    std::shared_ptr<POU> getPOU(const QModelIndex& index) const;
 
 signals:
     void projectOpened(const QString& projectPath);

@@ -3,9 +3,13 @@
 #include <QPlainTextEdit>
 #include <QSyntaxHighlighter>
 #include <QRegularExpression>
+#include <QTimer>
 
 namespace nascode {
 namespace views {
+
+class CodeCompleter;
+class SnippetManager;
 
 /**
  * @brief ST语言语法高亮器
@@ -51,19 +55,75 @@ public:
     void setFilePath(const QString& filePath) { m_filePath = filePath; }
     QString filePath() const { return m_filePath; }
 
+    /**
+     * @brief 获取代码补全器
+     */
+    CodeCompleter* completer() const { return m_completer; }
+
+    /**
+     * @brief 获取代码片段管理器
+     */
+    SnippetManager* snippetManager() const { return m_snippetManager; }
+
+    /**
+     * @brief 切换注释(选中行或当前行)
+     */
+    void toggleComment();
+
+    /**
+     * @brief 自动格式化选中文本或全部代码
+     */
+    void formatCode();
+
+    /**
+     * @brief 跳转到指定行
+     */
+    void gotoLine(int line);
+
+    /**
+     * @brief 查找匹配的括号
+     */
+    void findMatchingBracket();
+
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount);
     void highlightCurrentLine();
     void updateLineNumberArea(const QRect& rect, int dy);
+    void onTextChanged();
+    void checkAutoCompletion();
+
+private:
+    void highlightMatchingBrackets();
+    void autoIndent();
+    QString getIndentation(const QString& line) const;
+    bool isOpeningBracket(QChar c) const;
+    bool isClosingBracket(QChar c) const;
+    QChar getMatchingBracket(QChar c) const;
 
 private:
     QWidget* m_lineNumberArea;
     STSyntaxHighlighter* m_highlighter;
     QString m_filePath;
+    
+    // 智能编辑功能
+    CodeCompleter* m_completer;
+    SnippetManager* m_snippetManager;
+    QTimer* m_completionTimer;
+    
+    // 括号匹配
+    QList<QTextEdit::ExtraSelection> m_bracketSelections;
+    
+    // 配置
+    bool m_autoIndentEnabled;
+    bool m_bracketMatchingEnabled;
+    bool m_autoCompletionEnabled;
+    int m_tabSize;
 };
 
 /**
