@@ -1,0 +1,21 @@
+{
+  "name": "NasCode Project",
+  "version": "1.0.0",
+  "projectType": "IEC-61131-ST",
+  "targetDevice": "STVM",
+  "pous": [
+    {
+      "name": "Main",
+      "type": "PROGRAM",
+      "file": "src/Main.st"
+    }
+  ],
+  "libraries": [
+    "Standard.lib"
+  ],
+  "buildSettings": {
+    "optimization": "O2",
+    "warnings": true,
+    "debugInfo": true
+  }
+}

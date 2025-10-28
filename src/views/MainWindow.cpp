@@ -1,0 +1,297 @@
+#include "MainWindow.h"
+#include "CodeEditor.h"
+#include "OutputPanel.h"
+#include "../controllers/ProjectController.h"
+#include <QApplication>
+#include <QMessageBox>
+#include <QFileDialog>
+#include <QDockWidget>
+#include <QVBoxLayout>
+#include <QIcon>
+#include <QCloseEvent>
+#include <spdlog/spdlog.h>
+
+namespace nascode {
+namespace views {
+
+MainWindow::MainWindow(QWidget* parent)
+    : QMainWindow(parent)
+{
+    setWindowTitle("NasCode - IEC-61131 ST Programming Environment");
+    resize(1280, 800);
+
+    createActions();
+    createMenus();
+    createToolBars();
+    createStatusBar();
+    createDockWindows();
+
+    // 创建中央部件
+    m_centralSplitter = new QSplitter(Qt::Horizontal, this);
+    
+    // 工程树
+    m_projectTree = new QTreeView(this);
+    m_projectTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_centralSplitter->addWidget(m_projectTree);
+
+    // 编辑器标签页
+    m_editorTabs = new QTabWidget(this);
+    m_editorTabs->setTabsClosable(true);
+    m_editorTabs->setMovable(true);
+    m_centralSplitter->addWidget(m_editorTabs);
+
+    m_centralSplitter->setStretchFactor(0, 1);
+    m_centralSplitter->setStretchFactor(1, 3);
+
+    setCentralWidget(m_centralSplitter);
+
+    setupConnections();
+
+    statusBar()->showMessage(tr("Ready"), 2000);
+}
+
+MainWindow::~MainWindow()
+{
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    // TODO: 检查未保存的更改
+    QMainWindow::closeEvent(event);
+}
+
+void MainWindow::createActions()
+{
+    // 文件菜单动作
+    m_newProjectAction = new QAction(tr("&New Project..."), this);
+    m_newProjectAction->setShortcut(QKeySequence::New);
+    m_newProjectAction->setStatusTip(tr("Create a new project"));
+
+    m_openProjectAction = new QAction(tr("&Open Project..."), this);
+    m_openProjectAction->setShortcut(QKeySequence::Open);
+    m_openProjectAction->setStatusTip(tr("Open an existing project"));
+
+    m_saveProjectAction = new QAction(tr("&Save"), this);
+    m_saveProjectAction->setShortcut(QKeySequence::Save);
+    m_saveProjectAction->setStatusTip(tr("Save the current project"));
+
+    m_closeProjectAction = new QAction(tr("&Close Project"), this);
+    m_closeProjectAction->setStatusTip(tr("Close the current project"));
+
+    m_exitAction = new QAction(tr("E&xit"), this);
+    m_exitAction->setShortcut(QKeySequence::Quit);
+    m_exitAction->setStatusTip(tr("Exit the application"));
+
+    // 编辑菜单动作
+    m_undoAction = new QAction(tr("&Undo"), this);
+    m_undoAction->setShortcut(QKeySequence::Undo);
+
+    m_redoAction = new QAction(tr("&Redo"), this);
+    m_redoAction->setShortcut(QKeySequence::Redo);
+
+    m_cutAction = new QAction(tr("Cu&t"), this);
+    m_cutAction->setShortcut(QKeySequence::Cut);
+
+    m_copyAction = new QAction(tr("&Copy"), this);
+    m_copyAction->setShortcut(QKeySequence::Copy);
+
+    m_pasteAction = new QAction(tr("&Paste"), this);
+    m_pasteAction->setShortcut(QKeySequence::Paste);
+
+    // 构建菜单动作
+    m_buildAction = new QAction(tr("&Build"), this);
+    m_buildAction->setShortcut(Qt::Key_F7);
+    m_buildAction->setStatusTip(tr("Build the project"));
+
+    m_rebuildAction = new QAction(tr("&Rebuild"), this);
+    m_cleanAction = new QAction(tr("&Clean"), this);
+
+    // 调试菜单动作
+    m_downloadAction = new QAction(tr("&Download to Device"), this);
+    m_downloadAction->setStatusTip(tr("Download program to STVM"));
+
+    m_startDebugAction = new QAction(tr("&Start Debugging"), this);
+    m_startDebugAction->setShortcut(Qt::Key_F5);
+
+    m_stopDebugAction = new QAction(tr("S&top Debugging"), this);
+    m_stopDebugAction->setShortcut(Qt::SHIFT | Qt::Key_F5);
+
+    m_pauseDebugAction = new QAction(tr("&Pause"), this);
+}
+
+void MainWindow::createMenus()
+{
+    m_fileMenu = menuBar()->addMenu(tr("&File"));
+    m_fileMenu->addAction(m_newProjectAction);
+    m_fileMenu->addAction(m_openProjectAction);
+    m_fileMenu->addAction(m_saveProjectAction);
+    m_fileMenu->addAction(m_closeProjectAction);
+    m_fileMenu->addSeparator();
+    m_fileMenu->addAction(m_exitAction);
+
+    m_editMenu = menuBar()->addMenu(tr("&Edit"));
+    m_editMenu->addAction(m_undoAction);
+    m_editMenu->addAction(m_redoAction);
+    m_editMenu->addSeparator();
+    m_editMenu->addAction(m_cutAction);
+    m_editMenu->addAction(m_copyAction);
+    m_editMenu->addAction(m_pasteAction);
+
+    m_buildMenu = menuBar()->addMenu(tr("&Build"));
+    m_buildMenu->addAction(m_buildAction);
+    m_buildMenu->addAction(m_rebuildAction);
+    m_buildMenu->addAction(m_cleanAction);
+
+    m_debugMenu = menuBar()->addMenu(tr("&Debug"));
+    m_debugMenu->addAction(m_downloadAction);
+    m_debugMenu->addSeparator();
+    m_debugMenu->addAction(m_startDebugAction);
+    m_debugMenu->addAction(m_pauseDebugAction);
+    m_debugMenu->addAction(m_stopDebugAction);
+
+    m_toolsMenu = menuBar()->addMenu(tr("&Tools"));
+    m_helpMenu = menuBar()->addMenu(tr("&Help"));
+}
+
+void MainWindow::createToolBars()
+{
+    m_fileToolBar = addToolBar(tr("File"));
+    m_fileToolBar->addAction(m_newProjectAction);
+    m_fileToolBar->addAction(m_openProjectAction);
+    m_fileToolBar->addAction(m_saveProjectAction);
+
+    m_editToolBar = addToolBar(tr("Edit"));
+    m_editToolBar->addAction(m_undoAction);
+    m_editToolBar->addAction(m_redoAction);
+    m_editToolBar->addSeparator();
+    m_editToolBar->addAction(m_cutAction);
+    m_editToolBar->addAction(m_copyAction);
+    m_editToolBar->addAction(m_pasteAction);
+
+    m_buildToolBar = addToolBar(tr("Build"));
+    m_buildToolBar->addAction(m_buildAction);
+
+    m_debugToolBar = addToolBar(tr("Debug"));
+    m_debugToolBar->addAction(m_downloadAction);
+    m_debugToolBar->addAction(m_startDebugAction);
+    m_debugToolBar->addAction(m_pauseDebugAction);
+    m_debugToolBar->addAction(m_stopDebugAction);
+}
+
+void MainWindow::createStatusBar()
+{
+    statusBar()->showMessage(tr("Ready"));
+}
+
+void MainWindow::createDockWindows()
+{
+    // 输出面板
+    m_outputDock = new QDockWidget(tr("Output"), this);
+    m_outputPanel = new OutputPanel(m_outputDock);
+    m_outputDock->setWidget(m_outputPanel);
+    addDockWidget(Qt::BottomDockWidgetArea, m_outputDock);
+
+    // 变量监视窗口
+    m_watchDock = new QDockWidget(tr("Watch"), this);
+    QWidget* watchWidget = new QWidget();
+    m_watchDock->setWidget(watchWidget);
+    addDockWidget(Qt::RightDockWidgetArea, m_watchDock);
+
+    // 库浏览器
+    m_libraryDock = new QDockWidget(tr("Library"), this);
+    QWidget* libraryWidget = new QWidget();
+    m_libraryDock->setWidget(libraryWidget);
+    addDockWidget(Qt::RightDockWidgetArea, m_libraryDock);
+}
+
+void MainWindow::setupConnections()
+{
+    connect(m_newProjectAction, &QAction::triggered, this, &MainWindow::onNewProject);
+    connect(m_openProjectAction, &QAction::triggered, this, &MainWindow::onOpenProject);
+    connect(m_saveProjectAction, &QAction::triggered, this, &MainWindow::onSaveProject);
+    connect(m_closeProjectAction, &QAction::triggered, this, &MainWindow::onCloseProject);
+    connect(m_exitAction, &QAction::triggered, this, &MainWindow::close);
+
+    connect(m_buildAction, &QAction::triggered, this, &MainWindow::onBuild);
+    connect(m_downloadAction, &QAction::triggered, this, &MainWindow::onDownload);
+    connect(m_startDebugAction, &QAction::triggered, this, &MainWindow::onStartDebug);
+
+    connect(m_projectTree, &QTreeView::customContextMenuRequested, 
+            this, &MainWindow::onProjectTreeContextMenu);
+    connect(m_projectTree, &QTreeView::doubleClicked, 
+            this, &MainWindow::onProjectItemDoubleClicked);
+}
+
+void MainWindow::onNewProject()
+{
+    spdlog::info("New project requested");
+    // TODO: 显示新建工程对话框
+}
+
+void MainWindow::onOpenProject()
+{
+    QString fileName = QFileDialog::getOpenFileName(this,
+        tr("Open Project"), "", tr("NasCode Project (*.nsp)"));
+    
+    if (!fileName.isEmpty()) {
+        spdlog::info("Opening project: {}", fileName.toStdString());
+        // TODO: 通过Controller打开工程
+    }
+}
+
+void MainWindow::onSaveProject()
+{
+    spdlog::info("Save project requested");
+    // TODO: 保存当前工程
+}
+
+void MainWindow::onCloseProject()
+{
+    spdlog::info("Close project requested");
+    // TODO: 关闭当前工程
+}
+
+void MainWindow::onUndo() {}
+void MainWindow::onRedo() {}
+void MainWindow::onCut() {}
+void MainWindow::onCopy() {}
+void MainWindow::onPaste() {}
+
+void MainWindow::onBuild()
+{
+    spdlog::info("Build requested");
+    m_outputPanel->appendMessage("Building project...");
+    // TODO: 触发编译
+}
+
+void MainWindow::onRebuild() {}
+void MainWindow::onClean() {}
+
+void MainWindow::onDownload()
+{
+    spdlog::info("Download to device requested");
+    m_outputPanel->appendMessage("Downloading to STVM...");
+    // TODO: 下载程序
+}
+
+void MainWindow::onStartDebug()
+{
+    spdlog::info("Start debugging requested");
+    // TODO: 启动调试
+}
+
+void MainWindow::onStopDebug() {}
+void MainWindow::onPauseDebug() {}
+
+void MainWindow::onProjectTreeContextMenu(const QPoint& pos)
+{
+    // TODO: 显示右键菜单
+}
+
+void MainWindow::onProjectItemDoubleClicked(const QModelIndex& index)
+{
+    // TODO: 打开编辑器
+}
+
+} // namespace views
+} // namespace nascode
